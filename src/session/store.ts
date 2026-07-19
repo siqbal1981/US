@@ -148,3 +148,12 @@ export async function pingSessionStore(): Promise<boolean> {
     return false;
   }
 }
+
+/** Exposed for per-tenant rate/concurrency counters in server.ts. Null in dev fallback. */
+export function getRedisClient(): Redis | null {
+  return redis;
+}
+
+export async function closeSessionStore(): Promise<void> {
+  if (redis) await redis.quit();
+}
