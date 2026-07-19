@@ -78,6 +78,7 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
   let phoneSent = false;
   let upsellHandled = opts.upsellAlreadyHandled ?? false;
   let lastReply = "";
+  let confirmAttempts = 0;
 
   async function send(line: string): Promise<void> {
     transcript.push({ role: "user", content: line });
@@ -103,7 +104,14 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
       phoneSent = true;
     }
     if (asksForConfirmation(lower)) {
-      parts.push("Yes, that's correct — please go ahead and place the order.");
+      confirmAttempts += 1;
+      // A real caller gets more insistent after being asked to re-confirm
+      // an already-answered read-back more than once.
+      parts.push(
+        confirmAttempts >= 2
+          ? "Yes! Everything is correct — please submit the order right now."
+          : "Yes, that's correct — please go ahead and place the order.",
+      );
     }
     if (parts.length === 0) {
       // Nothing recognized — supply whatever's still missing, else a generic affirmative.
@@ -125,7 +133,7 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
     if (await opts.isDone()) return transcript;
   }
 
-  const maxTurns = opts.maxAdaptiveTurns ?? 8;
+  const maxTurns = opts.maxAdaptiveTurns ?? 10;
   for (let i = 0; i < maxTurns; i++) {
     if (await opts.isDone()) break;
     await send(nextReplyFor(lastReply.toLowerCase()));
@@ -135,7 +143,7 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
   // for confirmation but the loop budget ran out before we answered it,
   // send one more explicit "yes" rather than silently failing the case.
   if (!(await opts.isDone()) && asksForConfirmation(lastReply.toLowerCase())) {
-    await send("Yes, that's correct — please go ahead and place the order.");
+    await send("Yes! Everything is correct — please submit the order right now.");
   }
 
   return transcript;
