@@ -1,0 +1,78 @@
+{
+  "slug": "casa-maria",
+  "name": "Casa Maria Tacos",
+  "twilioNumber": "+15555550200",
+  "taxRateBps": 800,
+  "timezone": "America/Chicago",
+  "openHour": 10,
+  "closeHour": 21,
+  "fallbackSmsNumber": "+15555550201",
+  "upsellRule": "Offer chips and guac or a drink, once per call, never repeat if declined.",
+  "greeting": "Thanks for calling Casa Maria Tacos! What can I get started for you?",
+  "menu": [
+    {
+      "name": "Carne Asada Taco",
+      "category": "Tacos",
+      "basePriceCents": 349,
+      "modifiers": [{ "group": "option", "name": "Extra Cheese", "priceDeltaCents": 100 }]
+    },
+    {
+      "name": "Al Pastor Taco",
+      "category": "Tacos",
+      "basePriceCents": 349,
+      "modifiers": [{ "group": "option", "name": "Extra Cheese", "priceDeltaCents": 100 }]
+    },
+    {
+      "name": "Chicken Tinga Taco",
+      "category": "Tacos",
+      "basePriceCents": 329,
+      "modifiers": [{ "group": "option", "name": "Extra Cheese", "priceDeltaCents": 100 }]
+    },
+    {
+      "name": "Veggie Taco",
+      "category": "Tacos",
+      "basePriceCents": 299,
+      "modifiers": [{ "group": "option", "name": "Extra Cheese", "priceDeltaCents": 100 }]
+    },
+    {
+      "name": "Carne Asada Burrito",
+      "category": "Burritos",
+      "basePriceCents": 999,
+      "modifiers": [{ "group": "option", "name": "Add Guac", "priceDeltaCents": 150 }]
+    },
+    {
+      "name": "Bean & Cheese Burrito",
+      "category": "Burritos",
+      "basePriceCents": 799,
+      "modifiers": [{ "group": "option", "name": "Add Guac", "priceDeltaCents": 150 }]
+    },
+    {
+      "name": "Chips & Salsa",
+      "category": "Sides",
+      "basePriceCents": 399,
+      "modifiers": []
+    },
+    {
+      "name": "Chips & Guac",
+      "category": "Sides",
+      "basePriceCents": 599,
+      "modifiers": []
+    },
+    {
+      "name": "Horchata",
+      "category": "Drinks",
+      "basePriceCents": 299,
+      "modifiers": []
+    },
+    {
+      "name": "Jarritos",
+      "category": "Drinks",
+      "basePriceCents": 249,
+      "modifiers": [
+        { "group": "option", "name": "Mandarin", "priceDeltaCents": 0 },
+        { "group": "option", "name": "Tamarindo", "priceDeltaCents": 0 },
+        { "group": "option", "name": "Lime", "priceDeltaCents": 0 }
+      ]
+    }
+  ]
+}

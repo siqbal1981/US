@@ -11,41 +11,49 @@ import { registerVoiceRelay } from "./voice/relay.js";
 
 const CONCURRENCY_LIMIT = 20;
 const RATE_LIMIT_PER_MIN = 60;
-const SESSION_TTL_SECONDS = 900;
 
 const app = Fastify({ loggerInstance: logger });
 
 await app.register(websocketPlugin);
 
 // ---- rate / concurrency limiting (Redis counters; skipped in dev fallback) ----
+// Concurrency = requests actually in flight right now for this tenant (an
+// acquire/release counter), NOT distinct sessions seen within the session
+// TTL window — that would trip on any burst of short calls/tests, not just
+// genuine simultaneous phone lines.
 
-async function checkTenantLimits(tenantId: string): Promise<{ ok: boolean; reason?: string }> {
+async function checkRateLimit(tenantId: string): Promise<{ ok: boolean; reason?: string }> {
   const redis = getRedisClient();
   if (!redis) return { ok: true }; // dev fallback: skip limits
 
-  const now = Date.now();
-  const concurrencyKey = `concurrency:${tenantId}`;
-  await redis.zremrangebyscore(concurrencyKey, 0, now);
-  const activeCount = await redis.zcard(concurrencyKey);
-  if (activeCount >= CONCURRENCY_LIMIT) {
-    return { ok: false, reason: "too many concurrent sessions for this restaurant, please try again shortly" };
-  }
-
-  const minuteBucket = Math.floor(now / 60000);
+  const minuteBucket = Math.floor(Date.now() / 60000);
   const rateKey = `ratelimit:${tenantId}:${minuteBucket}`;
   const count = await redis.incr(rateKey);
   if (count === 1) await redis.expire(rateKey, 60);
   if (count > RATE_LIMIT_PER_MIN) {
     return { ok: false, reason: "too many requests right now, please try again in a moment" };
   }
-
   return { ok: true };
 }
 
-async function markSessionActive(tenantId: string, sessionId: string): Promise<void> {
+async function acquireConcurrencySlot(tenantId: string): Promise<boolean> {
+  const redis = getRedisClient();
+  if (!redis) return true; // dev fallback: skip limits
+
+  const key = `concurrency:${tenantId}`;
+  const count = await redis.incr(key);
+  if (count === 1) await redis.expire(key, 60); // safety net if release is ever missed (crash mid-request)
+  if (count > CONCURRENCY_LIMIT) {
+    await redis.decr(key);
+    return false;
+  }
+  return true;
+}
+
+async function releaseConcurrencySlot(tenantId: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis) return;
-  await redis.zadd(`concurrency:${tenantId}`, Date.now() + SESSION_TTL_SECONDS * 1000, sessionId);
+  await redis.decr(`concurrency:${tenantId}`);
 }
 
 // ---- routes ----
@@ -80,27 +88,35 @@ app.post<{ Body: ChatBody }>("/chat", async (req, reply) => {
     return reply.code(404).send({ error: `Unknown tenant: ${tenantSlug}` });
   }
 
-  const limit = await checkTenantLimits(tenant.id);
-  if (!limit.ok) {
-    return reply.code(429).send({ error: limit.reason });
+  const rate = await checkRateLimit(tenant.id);
+  if (!rate.ok) {
+    return reply.code(429).send({ error: rate.reason });
   }
-  await markSessionActive(tenant.id, sessionId);
 
-  const result = await runTurn(sessionId, tenant, message, { voiceMode: false });
+  const acquired = await acquireConcurrencySlot(tenant.id);
+  if (!acquired) {
+    return reply.code(429).send({ error: "too many concurrent sessions for this restaurant, please try again shortly" });
+  }
 
-  req.log.info(
-    {
-      sessionId,
-      tenantId: tenant.id,
-      tools: result.toolsUsed,
-      latencyMs: result.latencyMs,
-      inTok: result.usage.inputTokens,
-      outTok: result.usage.outputTokens,
-    },
-    "agent turn",
-  );
+  try {
+    const result = await runTurn(sessionId, tenant, message, { voiceMode: false });
 
-  return reply.send({ reply: result.reply, latencyMs: result.latencyMs, usage: result.usage });
+    req.log.info(
+      {
+        sessionId,
+        tenantId: tenant.id,
+        tools: result.toolsUsed,
+        latencyMs: result.latencyMs,
+        inTok: result.usage.inputTokens,
+        outTok: result.usage.outputTokens,
+      },
+      "agent turn",
+    );
+
+    return reply.send({ reply: result.reply, latencyMs: result.latencyMs, usage: result.usage });
+  } finally {
+    await releaseConcurrencySlot(tenant.id);
+  }
 });
 
 app.post("/voice/incoming", async (req, reply) => {
