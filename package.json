@@ -1,0 +1,43 @@
+{
+  "name": "dsp-restaurant-agent",
+  "version": "1.0.0",
+  "description": "Multi-tenant AI restaurant order-taking system",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "seed": "tsx src/db/seed.ts",
+    "test": "vitest run",
+    "score-table": "tsx scripts/score-table.ts",
+    "test:suite": "tsx scripts/test-suite.ts",
+    "test:live": "tsx scripts/live-tests.ts",
+    "add-tenant": "tsx scripts/add-tenant.ts",
+    "isolation-test": "tsx scripts/isolation-test.ts",
+    "concurrency-test": "tsx scripts/concurrency-test.ts",
+    "cost-report": "tsx scripts/cost-report.ts",
+    "deploy:migrate": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@fastify/websocket": "^11.0.1",
+    "@prisma/client": "^5.22.0",
+    "fastify": "^5.1.0",
+    "ioredis": "^5.4.1",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0",
+    "twilio": "^5.3.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/ws": "^8.5.12",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
