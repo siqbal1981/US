@@ -35,7 +35,7 @@ export function sleep(ms: number): Promise<void> {
 
 const UPSELL_KEYWORDS = ["drink", "soda", "side", "fries", "garlic knots", "dessert", "cannoli", "wings", "add-on", "add on"];
 const NAME_ASK_KEYWORDS = ["pickup name", "name for", "name should", "your name", "who should", "what name", "name is it"];
-const CONFIRM_ASK_KEYWORDS = ["look good", "sound good", "does that", "all set", "correct?"];
+const CONFIRM_ASK_KEYWORDS = ["look good", "sound good", "does that", "all set", "correct?", "right?", "confirm"];
 const PHONE_ASK_KEYWORDS = ["phone number", "callback number", "phone #", "digits", "different one", "this number"];
 const FAKE_PHONE_NUMBER = "555-123-4567";
 
@@ -103,7 +103,7 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
       phoneSent = true;
     }
     if (asksForConfirmation(lower)) {
-      parts.push("Yes, that's correct.");
+      parts.push("Yes, that's correct — please go ahead and place the order.");
     }
     if (parts.length === 0) {
       // Nothing recognized — supply whatever's still missing, else a generic affirmative.
@@ -135,7 +135,7 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
   // for confirmation but the loop budget ran out before we answered it,
   // send one more explicit "yes" rather than silently failing the case.
   if (!(await opts.isDone()) && asksForConfirmation(lastReply.toLowerCase())) {
-    await send("Yes, that's correct.");
+    await send("Yes, that's correct — please go ahead and place the order.");
   }
 
   return transcript;
