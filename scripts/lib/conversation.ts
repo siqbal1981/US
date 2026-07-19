@@ -36,6 +36,8 @@ export function sleep(ms: number): Promise<void> {
 const UPSELL_KEYWORDS = ["drink", "soda", "side", "fries", "garlic knots", "dessert", "cannoli", "wings", "add-on", "add on"];
 const NAME_ASK_KEYWORDS = ["pickup name", "name for", "name should", "your name", "who should", "what name", "name is it"];
 const CONFIRM_ASK_KEYWORDS = ["look good", "sound good", "does that", "all set", "correct?"];
+const PHONE_ASK_KEYWORDS = ["phone number", "callback number", "phone #", "digits", "different one", "this number"];
+const FAKE_PHONE_NUMBER = "555-123-4567";
 
 export function looksLikeUpsellOffer(text: string): boolean {
   const lower = text.toLowerCase();
@@ -48,6 +50,10 @@ function asksForName(lower: string): boolean {
 
 function asksForConfirmation(lower: string): boolean {
   return CONFIRM_ASK_KEYWORDS.some((kw) => lower.includes(kw)) || (lower.includes("total") && lower.includes("$"));
+}
+
+function asksForPhone(lower: string): boolean {
+  return PHONE_ASK_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 export interface DriveOptions {
@@ -69,6 +75,7 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
   const delay = opts.interTurnDelayMs ?? 1100;
   const transcript: Turn[] = [];
   let nameSent = false;
+  let phoneSent = false;
   let upsellHandled = opts.upsellAlreadyHandled ?? false;
   let lastReply = "";
 
@@ -80,16 +87,7 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
     await sleep(delay);
   }
 
-  for (const line of opts.openingLines) {
-    await send(line);
-    if (await opts.isDone()) return transcript;
-  }
-
-  const maxTurns = opts.maxAdaptiveTurns ?? 6;
-  for (let i = 0; i < maxTurns; i++) {
-    if (await opts.isDone()) break;
-
-    const lower = lastReply.toLowerCase();
+  function nextReplyFor(lower: string): string {
     const parts: string[] = [];
 
     if (!upsellHandled && looksLikeUpsellOffer(lastReply)) {
@@ -100,21 +98,44 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
       parts.push(`Put it under ${opts.pickupName}.`);
       nameSent = true;
     }
+    if (!phoneSent && asksForPhone(lower)) {
+      parts.push(`You can use ${FAKE_PHONE_NUMBER}.`);
+      phoneSent = true;
+    }
     if (asksForConfirmation(lower)) {
       parts.push("Yes, that's correct.");
     }
     if (parts.length === 0) {
-      // Nothing recognized — supply the pickup name if not sent yet (most
-      // common remaining gap), else a generic affirmative.
+      // Nothing recognized — supply whatever's still missing, else a generic affirmative.
       if (!nameSent) {
         parts.push(`Put it under ${opts.pickupName}.`);
         nameSent = true;
+      } else if (!phoneSent) {
+        parts.push(`You can use ${FAKE_PHONE_NUMBER}.`);
+        phoneSent = true;
       } else {
         parts.push("Yes.");
       }
     }
+    return parts.join(" ");
+  }
 
-    await send(parts.join(" "));
+  for (const line of opts.openingLines) {
+    await send(line);
+    if (await opts.isDone()) return transcript;
+  }
+
+  const maxTurns = opts.maxAdaptiveTurns ?? 8;
+  for (let i = 0; i < maxTurns; i++) {
+    if (await opts.isDone()) break;
+    await send(nextReplyFor(lastReply.toLowerCase()));
+  }
+
+  // Guaranteed last resort: if the final reply is clearly a read-back asking
+  // for confirmation but the loop budget ran out before we answered it,
+  // send one more explicit "yes" rather than silently failing the case.
+  if (!(await opts.isDone()) && asksForConfirmation(lastReply.toLowerCase())) {
+    await send("Yes, that's correct.");
   }
 
   return transcript;
