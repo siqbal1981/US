@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  name              String
+  twilioNumber      String   @unique // E.164
+  taxRateBps        Int      @default(825) // 8.25% = 825
+  timezone          String   @default("America/New_York")
+  openHour          Int      @default(11)
+  closeHour         Int      @default(22)
+  payAtPickup       Boolean  @default(true)
+  fallbackSmsNumber String? // restaurant phone for order SMS
+  upsellRule        String   @default("Offer one drink or side, once per call, never repeat if declined.")
+  greeting          String   @default("Thanks for calling! What can I get started for you?")
+  createdAt         DateTime @default(now())
+
+  menuItems MenuItem[]
+  modifiers Modifier[]
+  orders    Order[]
+  callLogs  CallLog[]
+}
+
+model MenuItem {
+  id             String  @id @default(cuid())
+  tenantId       String
+  name           String
+  category       String
+  basePriceCents Int
+  available      Boolean @default(true) // false = 86'd
+  altSuggestion  String?
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  modifiers Modifier[]
+
+  @@unique([tenantId, id]) // target for compound FK below
+  @@index([tenantId])
+}
+
+model Modifier {
+  id              String @id @default(cuid())
+  tenantId        String
+  menuItemId      String
+  group           String // "size" | "topping" | "option"
+  name            String
+  priceDeltaCents Int    @default(0)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  // COMPOUND FK — a modifier can NEVER reference another tenant's item:
+  menuItem MenuItem @relation(fields: [tenantId, menuItemId], references: [tenantId, id])
+
+  @@index([tenantId, menuItemId])
+}
+
+model Order {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  callSid            String?
+  status             String   @default("confirmed")
+  itemsJson          Json // PricedLine[] snapshot
+  subtotalCents      Int
+  taxCents           Int
+  totalCents         Int
+  customerPhone      String?
+  pickupName         String?
+  pickupEtaMinutes   Int      @default(20)
+  scheduledForReopen Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, callSid]) // DUPLICATE GUARD LAYER 3
+  @@index([tenantId, createdAt])
+}
+
+model CallLog {
+  id             String   @id @default(cuid())
+  tenantId       String
+  callSid        String   @unique
+  callerNumber   String?
+  outcome        String   @default("in_progress") // completed|escalated|abandoned|in_progress
+  transcriptJson Json     @default("[]")
+  durationSec    Int      @default(0)
+  latencyMsAvg   Int      @default(0)
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+}
