@@ -140,7 +140,7 @@ async function main() {
     create: {
       slug: "tonys",
       name: "Tony's Pizza & Grill",
-      twilioNumber: "+15555550100",
+      twilioNumber: "+14632923334",
       taxRateBps: 825,
       timezone: "America/New_York",
       openHour: 11,

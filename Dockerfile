@@ -1,5 +1,7 @@
 FROM node:20-slim AS build
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
@@ -8,6 +10,8 @@ RUN npm run build
 
 FROM node:20-slim AS runtime
 WORKDIR /app
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
