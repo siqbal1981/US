@@ -1,0 +1,8 @@
+# Safety net for Railway builds that don't honor railway.json's
+# "builder": "DOCKERFILE" (a known Railway gotcha where the dashboard's
+# per-service Builder setting can override the repo config for services
+# provisioned before it was added). If Railway falls back to Nixpacks,
+# its Node.js provider doesn't guarantee OpenSSL is present in the final
+# runtime image, which breaks the Prisma query engine (needs libssl).
+[phases.setup]
+aptPkgs = ["openssl"]
