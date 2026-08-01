@@ -31,7 +31,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: "submit_order",
     description:
-      "Submit the finalized pickup order. Only call this after reading the full order and total back to the caller and receiving an explicit yes.",
+      "Submit the finalized pickup or delivery order. Only call this after reading the full order and total back to the caller and receiving an explicit yes.",
     input_schema: {
       type: "object",
       properties: {
@@ -48,10 +48,17 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
             required: ["menuItemId", "quantity", "modifierIds"],
           },
         },
-        pickupName: { type: "string" },
-        customerPhone: { type: "string", description: "only if different from caller ID" },
+        orderType: { type: "string", enum: ["pickup", "delivery"], description: "asked at the very start of the call" },
+        pickupName: { type: "string", description: "customer's name — also used as the delivery recipient's name" },
+        customerPhone: {
+          type: "string",
+          description: "if not on caller ID for pickup; REQUIRED for delivery",
+        },
+        deliveryAddress: { type: "string", description: "REQUIRED when orderType is delivery" },
+        deliveryAptSuite: { type: "string", description: "apartment/suite/unit number, if any" },
+        deliveryInstructions: { type: "string", description: "e.g. gate code, leave at door — optional" },
       },
-      required: ["items", "pickupName"],
+      required: ["items", "orderType", "pickupName"],
     },
   },
   {
@@ -116,8 +123,10 @@ async function handleCheckMenuItem(ctx: ToolContext, input: { query: string }) {
   return { status: "not_found", instruction: "say we don't have it; mention closest category" };
 }
 
-const ALREADY_SUBMITTED_INSTRUCTION =
-  "it's already in — briefly confirm, give pickup time, do NOT re-confirm or apologize at length";
+function alreadySubmittedInstruction(orderType: "pickup" | "delivery"): string {
+  const timeWord = orderType === "delivery" ? "delivery time" : "pickup time";
+  return `it's already in — briefly confirm, give ${timeWord}, do NOT re-confirm or apologize at length`;
+}
 
 async function handleSubmitOrder(ctx: ToolContext, rawInput: unknown) {
   // GUARD LAYER 2
@@ -126,7 +135,7 @@ async function handleSubmitOrder(ctx: ToolContext, rawInput: unknown) {
       status: "already_submitted",
       orderId: ctx.session.orderId,
       total: ctx.session.orderTotalCents,
-      instruction: ALREADY_SUBMITTED_INSTRUCTION,
+      instruction: alreadySubmittedInstruction(ctx.session.orderType ?? "pickup"),
     };
   }
 
@@ -155,6 +164,7 @@ async function handleSubmitOrder(ctx: ToolContext, rawInput: unknown) {
   }
 
   const open = isOpen(ctx.tenant);
+  const etaMinutes = parsed.data.orderType === "delivery" ? 40 : 20;
 
   try {
     const order = await prisma.order.create({
@@ -167,14 +177,19 @@ async function handleSubmitOrder(ctx: ToolContext, rawInput: unknown) {
         totalCents: priced.totalCents,
         customerPhone: parsed.data.customerPhone,
         pickupName: parsed.data.pickupName,
-        pickupEtaMinutes: 20,
+        pickupEtaMinutes: etaMinutes,
         scheduledForReopen: !open,
+        orderType: parsed.data.orderType,
+        deliveryAddress: parsed.data.deliveryAddress,
+        deliveryAptSuite: parsed.data.deliveryAptSuite,
+        deliveryInstructions: parsed.data.deliveryInstructions,
       },
     });
 
     ctx.session.orderSubmitted = true;
     ctx.session.orderId = order.id;
     ctx.session.orderTotalCents = order.totalCents;
+    ctx.session.orderType = parsed.data.orderType;
     // save session BEFORE returning so the guard survives a crash right after submit
     await saveSession(ctx.sessionId, ctx.session);
 
@@ -182,15 +197,16 @@ async function handleSubmitOrder(ctx: ToolContext, rawInput: unknown) {
       logger.error({ err, orderId: order.id }, "order SMS failed");
     });
 
+    const timeWord = parsed.data.orderType === "delivery" ? "delivery" : "pickup";
     return {
       status: "submitted",
       orderId: order.id,
       subtotal: priced.subtotalCents,
       tax: priced.taxCents,
       total: priced.totalCents,
-      pickupEtaMinutes: 20,
+      pickupEtaMinutes: etaMinutes,
       scheduledForReopen: !open,
-      instruction: "thank by name, state total + ~20 min pickup, wrap up; NEVER ask to place the order again",
+      instruction: `thank by name, state total + ~${etaMinutes} min ${timeWord}, wrap up; NEVER ask to place the order again`,
     };
   } catch (err) {
     // GUARD LAYER 3 — unique(tenantId, callSid) caught a race/duplicate submit
@@ -202,13 +218,14 @@ async function handleSubmitOrder(ctx: ToolContext, rawInput: unknown) {
         ctx.session.orderSubmitted = true;
         ctx.session.orderId = existing.id;
         ctx.session.orderTotalCents = existing.totalCents;
+        ctx.session.orderType = existing.orderType === "delivery" ? "delivery" : "pickup";
         await saveSession(ctx.sessionId, ctx.session);
       }
       return {
         status: "already_submitted",
         orderId: existing?.id,
         total: existing?.totalCents,
-        instruction: ALREADY_SUBMITTED_INSTRUCTION,
+        instruction: alreadySubmittedInstruction(existing?.orderType === "delivery" ? "delivery" : "pickup"),
       };
     }
     throw err;

@@ -123,6 +123,7 @@ export async function runTurn(
     orderSubmitted: session.orderSubmitted,
     orderId: session.orderId,
     orderTotalCents: session.orderTotalCents,
+    orderType: session.orderType,
     upsellOffered: session.upsellOffered,
     isOpen: open,
     voiceMode: options.voiceMode ?? false,

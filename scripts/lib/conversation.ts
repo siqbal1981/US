@@ -65,6 +65,13 @@ export interface DriveOptions {
   pickupName: string;
   /** Set true if openingLines already handled the upsell decision (accept or decline). */
   upsellAlreadyHandled?: boolean;
+  /**
+   * The prompt now asks pickup-vs-delivery as the very first thing after the
+   * greeting, before taking any items. Defaults to "pickup" so every
+   * existing pickup-only test case keeps working without modification; an
+   * explicit opening turn establishes it before openingLines are sent.
+   */
+  orderType?: "pickup" | "delivery";
   maxAdaptiveTurns?: number;
   interTurnDelayMs?: number;
   /** Called after every turn; the loop stops early once this returns true. */
@@ -127,6 +134,10 @@ export async function driveOrderConversation(opts: DriveOptions): Promise<Turn[]
     }
     return parts.join(" ");
   }
+
+  const orderType = opts.orderType ?? "pickup";
+  await send(orderType === "delivery" ? "This will be delivery." : "This is a pickup order.");
+  if (await opts.isDone()) return transcript;
 
   for (const line of opts.openingLines) {
     await send(line);

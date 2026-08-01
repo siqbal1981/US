@@ -61,19 +61,23 @@ model Modifier {
 }
 
 model Order {
-  id                 String   @id @default(cuid())
-  tenantId           String
-  callSid            String?
-  status             String   @default("confirmed")
-  itemsJson          Json // PricedLine[] snapshot
-  subtotalCents      Int
-  taxCents           Int
-  totalCents         Int
-  customerPhone      String?
-  pickupName         String?
-  pickupEtaMinutes   Int      @default(20)
-  scheduledForReopen Boolean  @default(false)
-  createdAt          DateTime @default(now())
+  id                   String   @id @default(cuid())
+  tenantId             String
+  callSid              String?
+  status               String   @default("confirmed")
+  itemsJson            Json // PricedLine[] snapshot
+  subtotalCents        Int
+  taxCents             Int
+  totalCents           Int
+  customerPhone        String?
+  pickupName           String? // also used as the delivery recipient's name
+  pickupEtaMinutes     Int      @default(20)
+  scheduledForReopen   Boolean  @default(false)
+  orderType            String   @default("pickup") // "pickup" | "delivery"
+  deliveryAddress      String?
+  deliveryAptSuite     String?
+  deliveryInstructions String?
+  createdAt            DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 

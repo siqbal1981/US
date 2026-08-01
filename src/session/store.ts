@@ -24,6 +24,7 @@ export interface Session {
   orderSubmitted: boolean; // GUARD LAYER 1 feeds prompt
   orderId?: string;
   orderTotalCents?: number;
+  orderType?: "pickup" | "delivery";
   upsellOffered: boolean;
   escalated: boolean;
   startedAt: number;

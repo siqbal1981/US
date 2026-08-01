@@ -21,17 +21,35 @@ function lineText(line: PricedLine): string {
 }
 
 function buildRestaurantMessage(order: Order, lines: PricedLine[]): string {
-  const header = `🍕 NEW PICKUP ORDER #${shortId(order.id)} — ${order.pickupName ?? "Guest"}`;
+  const isDelivery = order.orderType === "delivery";
+  const kindLabel = isDelivery ? "DELIVERY" : "PICKUP";
+  const header = `🍕 NEW ${kindLabel} ORDER #${shortId(order.id)} — ${order.pickupName ?? "Guest"}`;
   const body = lines.map(lineText).join("\n");
   const totals = `Subtotal ${fmt(order.subtotalCents)}  Tax ${fmt(order.taxCents)}  TOTAL ${fmt(order.totalCents)}`;
-  const footer = order.scheduledForReopen
-    ? "⏰ SCHEDULED FOR REOPEN\nPickup ~20 min after reopen. Pay at pickup."
-    : "Pickup ~20 min. Pay at pickup.";
-  return [header, body, totals, footer].join("\n");
+
+  const deliveryBlock = isDelivery
+    ? [
+        `Deliver to: ${order.deliveryAddress ?? "(no address given)"}${
+          order.deliveryAptSuite ? `, ${order.deliveryAptSuite}` : ""
+        }`,
+        order.customerPhone ? `Phone: ${order.customerPhone}` : null,
+        order.deliveryInstructions ? `Instructions: ${order.deliveryInstructions}` : null,
+      ].filter((l): l is string => Boolean(l))
+    : [];
+
+  const afterReopen = order.scheduledForReopen ? " after reopen" : "";
+  const timeLine = isDelivery
+    ? `Delivery ~${order.pickupEtaMinutes} min${afterReopen}. Pay at delivery.`
+    : `Pickup ~${order.pickupEtaMinutes} min${afterReopen}. Pay at pickup.`;
+  const footer = order.scheduledForReopen ? `⏰ SCHEDULED FOR REOPEN\n${timeLine}` : timeLine;
+
+  return [header, ...deliveryBlock, body, totals, footer].join("\n");
 }
 
 function buildCustomerMessage(tenant: Tenant, order: Order): string {
-  return `${tenant.name}: order confirmed, total ${fmt(order.totalCents)}, ready in ~20 min. Order #${shortId(order.id)}.`;
+  const isDelivery = order.orderType === "delivery";
+  const readyWord = isDelivery ? "out for delivery" : "ready for pickup";
+  return `${tenant.name}: order confirmed, total ${fmt(order.totalCents)}, ${readyWord} in ~${order.pickupEtaMinutes} min. Order #${shortId(order.id)}.`;
 }
 
 async function sendWithRetry(params: { to: string; from: string; body: string }, context: { orderId: string; kind: string }): Promise<void> {
